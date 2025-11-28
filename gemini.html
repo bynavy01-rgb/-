@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제이님의 유튜브 분석기 Ver 3.0 (키워드 추출탑재)</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #4F46E5; --bg: #F3F4F6; --card: #FFFFFF; --text: #1F2937; --border: #E5E7EB; }
+        [data-theme="dark"] { --primary: #818CF8; --bg: #111827; --card: #1F2937; --text: #F9FAFB; --border: #374151; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Malgun Gothic', sans-serif; }
+        body { background: var(--bg); color: var(--text); padding: 20px; transition: all 0.3s; }
+        .container { max-width: 1600px; margin: 0 auto; }
+        
+        /* 헤더 & 카드 */
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        /* 입력 & 필터 */
+        .input-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .input-row input { flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+        .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+        select { padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
+
+        /* 버튼들 */
+        button { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        .btn-search { background: var(--primary); width: 100%; margin-top: 15px; padding: 15px; font-size: 16px; }
+        .btn-search:hover { opacity: 0.9; }
+        .btn-sub { background: #10B981; font-size: 13px; padding: 8px 15px; margin-left: 10px; }
+        .theme-btn { background: var(--text); color: var(--bg); }
+        .btn-thumb { background: #EF4444; font-size: 11px; padding: 4px 8px; margin-top: 4px; display: inline-block; text-decoration: none; color: white; border-radius: 4px; }
+
+        /* 🔥 키워드 분석 영역 (NEW) */
+        .keyword-box { background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #818CF8; display: none; }
+        [data-theme="dark"] .keyword-box { background: #1e1b4b; border-color: #4338ca; }
+        .keyword-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .keyword-list { display: flex; flex-wrap: wrap; gap: 10px; }
+        .hot-keyword { background: white; color: var(--primary); padding: 8px 15px; border-radius: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-size: 14px; border: 1px solid var(--primary); }
+        .hot-keyword span { color: #EF4444; font-size: 12px; margin-left: 5px; }
+
+        /* 테이블 */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 1400px; font-size: 13px; }
+        th { background: var(--bg); padding: 12px; text-align: left; border-bottom: 2px solid var(--border); white-space: nowrap; }
+        td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+        .thumb-img { width: 120px; height: 68px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+        .tag { display: inline-block; background: var(--bg); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-size: 11px; margin: 2px; }
+        .loader { text-align: center; padding: 40px; color: var(--primary); display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1><i class="fab fa-youtube"></i> 제이의 분석기 Ver 3.0</h1>
+        <button class="theme-btn" onclick="toggleTheme()"><i class="fas fa-adjust"></i> 테마 변경</button>
+    </header>
+
+    <div class="card">
+        <div class="input-row">
+            <input type="password" id="apiKey" placeholder="🔑 YouTube API 키 입력">
+        </div>
+        <div class="input-row">
+            <input type="text" id="keyword" placeholder="🔍 검색어 (예: 북한군 파병, 탈북민 썰)" onkeypress="if(event.key==='Enter') search()">
+        </div>
+        <div class="filters">
+            <select id="dateFilter">
+                <option value="today">📅 오늘 (24시간)</option>
+                <option value="week">📅 이번 주 (7일)</option>
+                <option value="2weeks">📅 최근 2주 (14일)</option>
+                <option value="month">📅 최근 1달 (30일)</option>
+                <option value="any">📅 전체 기간</option>
+            </select>
+            <select id="durationFilter">
+                <option value="medium" selected>⏱️ 4~20분 (일반)</option>
+                <option value="long">⏱️ 20분 이상 (롱폼)</option>
+                <option value="short">⏱️ 4분 미만 (숏폼)</option>
+            </select>
+            <select id="sortFilter">
+                <option value="viewCount">🔥 조회수순</option>
+                <option value="date">🆕 최신순</option>
+                <option value="relevance">🎯 관련성순</option>
+            </select>
+            <select id="maxResults">
+                <option value="10">10개 분석</option>
+                <option value="20" selected>20개 분석</option>
+                <option value="30">30개 분석</option>
+                <option value="50">50개 분석</option>
+            </select>
+        </div>
+        <button class="btn-search" onclick="search()">🚀 분석 시작하기</button>
+    </div>
+
+    <div id="keywordArea" class="keyword-box">
+        <div class="keyword-header">
+            <h3 style="color:#4F46E5"><i class="fas fa-fire"></i> 검색된 영상들의 핵심 키워드 TOP 10</h3>
+            <button class="btn-sub" onclick="copyKeywords()"><i class="fas fa-copy"></i> 키워드 복사</button>
+        </div>
+        <div id="keywordList" class="keyword-list">
+            </div>
+        <p style="margin-top:10px; font-size:12px; color:#666;">* 이 단어들을 제목이나 설명란에 조합해서 사용해보세요!</p>
+    </div>
+
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3>📊 상세 데이터</h3>
+            <button class="btn-sub" onclick="downloadCSV()"><i class="fas fa-file-excel"></i> 엑셀 저장</button>
+        </div>
+        <div id="loader" class="loader"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>데이터를 분석 중입니다...</div>
+        <div class="table-wrap">
+            <table id="resultTable">
+                <thead>
+                    <tr>
+                        <th width="140">썸네일</th>
+                        <th>제목</th>
+                        <th width="120">채널</th>
+                        <th width="100">업로드</th>
+                        <th width="80">구독자</th>
+                        <th width="90">조회수</th>
+                        <th width="80">길이</th>
+                        <th width="80">반응도</th>
+                        <th>해시태그</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const savedKey = localStorage.getItem('yt_api_key_v3');
+    if(savedKey) document.getElementById('apiKey').value = savedKey;
+    
+    let currentData = [];
+    let topKeywords = [];
+
+    async function search() {
+        const apiKey = document.getElementById('apiKey').value;
+        const keyword = document.getElementById('keyword').value;
+        const max = document.getElementById('maxResults').value;
+        
+        if(!apiKey || !keyword) return alert('API 키와 검색어를 입력해주세요!');
+        localStorage.setItem('yt_api_key_v3', apiKey);
+
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('tableBody').innerHTML = '';
+        document.getElementById('keywordArea').style.display = 'none';
+
+        try {
+            // 1. 검색 API
+            let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(keyword)}&type=video&maxResults=${max}&order=${document.getElementById('sortFilter').value}&videoDuration=${document.getElementById('durationFilter').value}&key=${apiKey}`;
+            
+            // 날짜 필터 (any가 아닐 때만 적용)
+            const dateVal = document.getElementById('dateFilter').value;
+            if(dateVal !== 'any') {
+                let d = new Date();
+                d.setHours(0,0,0,0);
+                if(dateVal === 'today') d.setDate(d.getDate()-1);
+                else if(dateVal === 'week') d.setDate(d.getDate()-7);
+                else if(dateVal === '2weeks') d.setDate(d.getDate()-14);
+                else if(dateVal === 'month') d.setMonth(d.getMonth()-1);
+                searchUrl += `&publishedAfter=${d.toISOString()}`;
+            }
+
+            const searchRes = await fetch(searchUrl);
+            const searchData = await searchRes.json();
+            if(!searchData.items?.length) throw new Error('검색 결과가 없습니다.');
+
+            // 2. 상세 정보 API
+            const videoIds = searchData.items.map(i => i.id.videoId).join(',');
+            const videoRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKey}`);
+            const videoData = await videoRes.json();
+
+            // 3. 채널 정보 API
+            const channelIds = [...new Set(videoData.items.map(v => v.snippet.channelId))].join(',');
+            const channelRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelIds}&key=${apiKey}`);
+            const channelData = await channelRes.json();
+            const channelStats = {};
+            channelData.items.forEach(c => channelStats[c.id] = c.statistics.subscriberCount);
+
+            // 데이터 가공
+            currentData = videoData.items.map(v => {
+                const views = parseInt(v.statistics.viewCount || 0);
+                const subs = parseInt(channelStats[v.snippet.channelId] || 0);
+                const likes = parseInt(v.statistics.likeCount || 0);
+                const comments = parseInt(v.statistics.commentCount || 0);
+                
+                return {
+                    id: v.id,
+                    title: v.snippet.title,
+                    channel: v.snippet.channelTitle,
+                    thumb: v.snippet.thumbnails.maxres?.url || v.snippet.thumbnails.high.url,
+                    date: v.snippet.publishedAt.substr(0,10),
+                    subs: subs,
+                    views: views,
+                    duration: parseDuration(v.contentDetails.duration),
+                    likes: likes,
+                    comments: comments,
+                    tags: v.snippet.tags || [],
+                    // 반응도: (조회수/구독자) 비율. 구독자 0이면 조회수 그대로
+                    score: subs > 0 ? (views/subs).toFixed(1) : 'N/A' 
+                };
+            });
+
+            analyzeKeywords(currentData); // 키워드 분석 실행
+            renderTable();
+
+        } catch (e) {
+            alert('오류: ' + e.message);
+        } finally {
+            document.getElementById('loader').style.display = 'none';
+        }
+    }
+
+    // 🔥 핵심 기능: 키워드 추출
+    function analyzeKeywords(data) {
+        const textPool = [];
+        const stopWords = ['영상', '구독', '좋아요', '채널', '오늘', '안녕하세요', 'shorts', 'youtube', 'tv', '티비', '뉴스', '반응', '일본', '중국', '한국', '미국', '해외', '이유', '하는', '있는', '없는']; 
+
+        data.forEach(item => {
+            // 제목과 태그에서 단어 수집
+            const words = item.title.split(/\s+|[\[\](){},.|!]/); // 공백 및 특수문자로 분리
+            textPool.push(...words);
+            textPool.push(...item.tags);
+        });
+
+        const counts = {};
+        textPool.forEach(word => {
+            const cleanWord = word.replace(/[^가-힣a-zA-Z0-9]/g, ''); // 특수문자 제거
+            if(cleanWord.length > 1 && !stopWords.includes(cleanWord.toLowerCase())) {
+                counts[cleanWord] = (counts[cleanWord] || 0) + 1;
+            }
+        });
+
+        // 빈도순 정렬
+        topKeywords = Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(entry => ({ word: entry[0], count: entry[1] }));
+
+        // 화면 표시
+        const listArea = document.getElementById('keywordList');
+        listArea.innerHTML = topKeywords.map(k => 
+            `<div class="hot-keyword">${k.word} <span>${k.count}회</span></div>`
+        ).join('');
+        
+        if(topKeywords.length > 0) {
+            document.getElementById('keywordArea').style.display = 'block';
+        }
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = currentData.map(item => `
+            <tr>
+                <td>
+                    <img src="${item.thumb}" class="thumb-img"><br>
+                    <a href="${item.thumb}" target="_blank" class="btn-thumb">썸네일 받기</a>
+                </td>
+                <td><a href="https://youtu.be/${item.id}" target="_blank" style="text-decoration:none; color:var(--text); font-weight:bold">${item.title}</a></td>
+                <td>${item.channel}</td>
+                <td>${item.date}</td>
+                <td>${item.subs.toLocaleString()}</td>
+                <td style="color:var(--primary); font-weight:bold">${item.views.toLocaleString()}</td>
+                <td>${item.duration}</td>
+                <td>${item.score}배</td>
+                <td>${item.tags.slice(0,5).map(t => `<span class="tag">#${t}</span>`).join('')}</td>
+            </tr>
+        `).join('');
+    }
+
+    function copyKeywords() {
+        const text = topKeywords.map(k => k.word).join(', ');
+        navigator.clipboard.writeText(text).then(() => alert('✅ 키워드가 복사되었습니다!'));
+    }
+
+    function downloadCSV() {
+        if(!currentData.length) return alert('데이터가 없습니다.');
+        let csv = '\uFEFF제목,채널,날짜,구독자,조회수,좋아요,댓글,반응도,주요키워드\n';
+        currentData.forEach(row => {
+            csv += `"${row.title.replace(/"/g, '""')}","${row.channel}",${row.date},${row.subs},${row.views},${row.likes},${row.comments},${row.score},"${row.tags.join(' ')}"\n`;
+        });
+        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `유튜브분석_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+    }
+
+    function parseDuration(d) {
+        const m = d.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+        const h = (m[1]||'').replace('H','');
+        const min = (m[2]||'').replace('M','');
+        const s = (m[3]||'').replace('S','');
+        if(h) return `${h}:${min.padStart(2,'0')}:${s.padStart(2,'0')}`;
+        return `${min}:${s.padStart(2,'0')}`;
+    }
+
+    function toggleTheme() {
+        const b = document.body;
+        b.getAttribute('data-theme') ? b.removeAttribute('data-theme') : b.setAttribute('data-theme', 'dark');
+    }
+</script>
+</body>
+</html>
